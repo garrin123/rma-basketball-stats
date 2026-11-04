@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RMA Basketball Player Statistics</title>
+<style>
+*{box-sizing:border-box}body{background:#0d0d0d;color:white;font-family:Arial,sans-serif;margin:0;padding:24px 12px}.wrap{max-width:1200px;margin:auto}h1{color:#ffd21a;text-align:center;font-size:28px;margin:0 0 20px}.scroll{overflow-x:auto;border:1px solid #514516;border-radius:10px}table{width:100%;min-width:1030px;border-collapse:collapse;text-align:center}th{background:#ffd21a;color:#111;padding:13px 7px;font-size:12px}td{padding:10px 6px;border-bottom:1px solid #333}tbody tr:nth-child(even){background:#191919}tbody tr:last-child td{border-bottom:0}input.cell{width:100%;min-width:48px;max-width:110px;border:1px solid #777;border-radius:4px;background:#262626;color:white;padding:7px 4px;text-align:center;font:inherit}input.player{min-width:125px;max-width:190px;text-align:left}input.position{min-width:65px;max-width:75px}button{border:0;border-radius:6px;background:#ffd21a;color:#111;padding:10px 14px;font-weight:bold;cursor:pointer}button:disabled{opacity:.5;cursor:default}.toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:9px;margin-bottom:14px}.toolbar input{padding:10px;border-radius:6px;border:1px solid #777;background:#222;color:white;max-width:230px}.status{color:#ddd;font-size:13px;text-align:center;min-height:18px;margin:10px 0}.hint{color:#bbb;text-align:center;font-size:12px;margin-top:14px}.error{color:#ff8d8d}.success{color:#9be5a6}.hidden{display:none!important}td.name{text-align:left}td.number{color:#ffd21a} .readonly{color:#fff}
+</style></head><body><main class="wrap"><h1>🏀 PLAYER STATISTICS</h1>
+<div class="toolbar" id="signedOut"><input id="email" type="email" placeholder="Admin email" autocomplete="username"><input id="password" type="password" placeholder="Admin password" autocomplete="current-password"><button id="login">Admin sign in</button></div>
+<div class="toolbar hidden" id="signedIn"><span>Admin editing enabled</span><button id="save">Save changes</button><button id="logout">Sign out</button></div>
+<div class="status" id="status" role="status">Connecting to Firebase…</div>
+<div class="scroll"><table><thead><tr><th>#</th><th>PLAYER</th><th>POSITION</th><th>GP</th><th>PTS</th><th>PPG</th><th>REB</th><th>RBG</th><th>AST</th><th>ABG</th><th>STL</th><th>BLK</th><th>FG%</th><th>3P%</th><th>FT%</th></tr></thead><tbody id="players"></tbody></table></div>
+<p class="hint">Boys Varsity · 13 player slots. Viewers can see the latest saved stats. Only authorized admins can save updates. PPG = PTS ÷ GP · RBG = REB ÷ GP · ABG = AST ÷ GP.</p></main>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig={apiKey:"AIzaSyB7xUXw219ORKGBE7nAN2p2-reaU1VnPcc",authDomain:"rma-athlethics.firebaseapp.com",projectId:"rma-athlethics",storageBucket:"rma-athlethics.firebasestorage.app",messagingSenderId:"352472938114",appId:"1:352472938114:web:6547dcaa78681b2791e69b",measurementId:"G-4HNV6RZXNS"};
+firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth(),db=firebase.firestore();
+// Firestore rules must allow public reads and writes ONLY for your admin UID
+// to documents in the basketballStats collection.
+const docRef=db.collection('basketballStats').doc('players');
+const fields=['number','name','position','gp','pts','reb','ast','stl','blk','fg','three','ft'];
+const VARSITY_ROSTER_SIZE=13;
+const defaults=()=>Array.from({length:VARSITY_ROSTER_SIZE},(_,i)=>({number:'',name:`Player ${i+1}`,position:'',gp:'0',pts:'0',reb:'0',ast:'0',stl:'0',blk:'0',fg:'0',three:'0',ft:'0'}));
+let current=defaults(), editing=false, dirty=false, saving=false, loaded=false;
+const body=document.getElementById('players'),status=document.getElementById('status');
+function say(msg,kind=''){status.textContent=msg;status.className='status '+kind}
+function clean(v){return String(v??'')}
+function asNumber(v){const n=Number(v);return Number.isFinite(n)?n:0}
+function average(total,games){return asNumber(games)>0?(asNumber(total)/asNumber(games)).toFixed(1):'0.0'}
+function ppg(p){return asNumber(p.gp)>0?(asNumber(p.pts)/asNumber(p.gp)).toFixed(1):'0.0'}
+function render(){body.replaceChildren();current.forEach((p,i)=>{const tr=document.createElement('tr');
+const makeCell=(value,cls)=>{const td=document.createElement('td');if(cls)td.className=cls;td.textContent=value;tr.appendChild(td);return td};
+const add=(key,cls)=>{const td=document.createElement('td');if(cls)td.className=cls;if(editing){const input=document.createElement('input');input.className='cell '+(key==='name'?'player':key==='position'?'position':'');input.value=clean(p[key]);input.setAttribute('aria-label',`Player ${i+1} ${key}`);input.addEventListener('input',()=>{p[key]=input.value;dirty=true;if(key==='gp'||key==='pts')tr.querySelector('[data-ppg]').textContent=ppg(p);if(key==='gp'||key==='reb')tr.querySelector('[data-rpg]').textContent=average(p.reb,p.gp);if(key==='gp'||key==='ast')tr.querySelector('[data-apg]').textContent=average(p.ast,p.gp);say('Unsaved edits — click Save changes.');});td.appendChild(input)}else{td.textContent=clean(p[key])}tr.appendChild(td)};
+add('number','number');add('name','name');add('position');add('gp');add('pts');const td=makeCell(ppg(p));td.dataset.ppg='';add('reb');const rpgCell=makeCell(average(p.reb,p.gp));rpgCell.dataset.rpg='';add('ast');const apgCell=makeCell(average(p.ast,p.gp));apgCell.dataset.apg='';add('stl');add('blk');['fg','three','ft'].forEach(key=>add(key));body.appendChild(tr)});}
+function normalize(rows){return defaults().map((fallback,i)=>{const raw=rows&&typeof rows[i]==='object'?rows[i]:{};const row={};fields.forEach(key=>row[key]=clean(raw[key]??fallback[key]));return row})}
+auth.onAuthStateChanged(user=>{editing=!!user;document.getElementById('signedOut').classList.toggle('hidden',!!user);document.getElementById('signedIn').classList.toggle('hidden',!user);render();if(loaded)say(user?'Signed in. Edit the cells and click Save changes.':'Viewing published statistics.');});
+docRef.onSnapshot(snap=>{if(dirty){say('New server data arrived while you have unsaved edits. Save or refresh carefully.');return}current=normalize(snap.exists&&snap.data()?snap.data().rows:null);loaded=true;render();say(snap.exists?'Live statistics loaded.':'No saved statistics yet. Sign in and save the starting table.');},err=>say('Could not load stats: '+err.message,'error'));
+document.getElementById('login').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;if(!email||!password){say('Enter your admin email and password.','error');return}try{say('Signing in…');await auth.signInWithEmailAndPassword(email,password);document.getElementById('password').value='';say('Signed in. You can now edit and save.','success')}catch(e){say('Sign-in failed: '+e.message,'error')}};
+document.getElementById('logout').onclick=async()=>{if(dirty&&!confirm('You have unsaved changes. Sign out anyway?'))return;dirty=false;await auth.signOut();say('Signed out.');};
+document.getElementById('save').onclick=async()=>{if(!auth.currentUser){say('Please sign in first.','error');return}if(saving)return;const invalid=current.some(p=>['gp','pts','reb','ast','stl','blk','fg','three','ft'].some(k=>!Number.isFinite(Number(p[k]))||Number(p[k])<0)||['fg','three','ft'].some(k=>Number(p[k])>100));if(invalid){say('Use nonnegative numbers; percentages must be between 0 and 100.','error');return}saving=true;document.getElementById('save').disabled=true;try{await docRef.set({rows:current.map(p=>({...p})),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});dirty=false;say('Saved to Firebase! Everyone will see the updated stats.','success')}catch(e){say('Save failed: '+e.message+' Check your Firestore rules and admin UID.','error')}finally{saving=false;document.getElementById('save').disabled=false}};
+render();
+</script></body></html>
